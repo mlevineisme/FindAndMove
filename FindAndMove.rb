@@ -6,7 +6,7 @@ require 'FileUtils'
 
 def print_err errorMsg
    puts errorMsg
-   puts $!
+   puts $! unless errorMsg.eql?($!)
    puts $!.backtrace
 end
 
@@ -15,6 +15,7 @@ extensions_to_move = [".rb", ".xml"]
 source_folder = "c:/P4/test/pcatest/7.0/team/automation/TestScripts"
 DESTINATION_FOLDER = "C:\\TestRuns\\MovedScripts\\"
 LAST_PATH_SECTION_TO_REMOVE = "TestScripts"
+bad_files_array = Array.new
 puts "Files matching the .conf found in #{source_folder} will be copied to #{DESTINATION_FOLDER}\n\n"
 
 #-- Open the directory configuration file
@@ -37,39 +38,54 @@ script_names.each {|line|
 
 #-- Copy the source files into the destination directory
 begin
-#   FileUtils::mkdir(DESTINATION_FOLDER) unless (Dir.exists?(DESTINATION_FOLDER))
    filesEqual = []
    script_files.each do |file|
-      full_file_path = Dir.glob("#{source_folder}/**/#{file}").first
-      full_path_array = full_file_path.split("/").collect {|part_path| part_path unless part_path.eql?(file)}.compact
-      relevant_index = full_path_array.find_index(LAST_PATH_SECTION_TO_REMOVE)+1
-      relevant_path = full_path_array.slice(relevant_index, full_path_array.length).join("\\")
-      FileUtils::mkdir_p(DESTINATION_FOLDER + relevant_path) unless (Dir.exists?(DESTINATION_FOLDER + relevant_path))
-
-      copy_successful = false
       begin
-         copy_successful = true if (FileUtils.cp full_file_path, (DESTINATION_FOLDER + relevant_path), :preserve => true)
-      rescue TypeError
-         print_err "Error reading the source file. Do the source files exist in the local workspace for team?"
-      rescue
-         print_err "A problem arose when trying to copy the files"
-      end
-
-      if copy_successful.eql?(true)
-         begin
-            FileUtils.chmod("u=wrx,go=rx", "#{DESTINATION_FOLDER + relevant_path}\\#{file}") if (File.exist?("#{DESTINATION_FOLDER + relevant_path}\\#{file}")) and !(File.writable?("#{DESTINATION_FOLDER + relevant_path}\\#{file}"))
-             if (File.mtime("#{DESTINATION_FOLDER + relevant_path}\\#{file}".gsub("/", "\\")).eql?(File.mtime(full_file_path.gsub("/", "\\"))))
-               puts "#{full_file_path} was successfully copied to #{DESTINATION_FOLDER + relevant_path}"
-            else
-               puts "#{full_file_path} could not be copied to #{DESTINATION_FOLDER + relevant_path}!!!"
-            end
-         rescue
-            print_err "A problem arose when trying to change destination file permissions and verify the copy"
+         full_file_path = Dir.glob("#{source_folder}/**/#{file}").first   # First is used to return a string path, instead of an array
+         if full_file_path.eql?(nil)
+            bad_files_array << file
+            raise IOError, "#{file} does not exist in team"
          end
+         full_path_array = full_file_path.split("/").collect {|part_path| part_path unless part_path.eql?(file)}.compact
+         relevant_index = full_path_array.find_index(LAST_PATH_SECTION_TO_REMOVE)+1
+         relevant_path = full_path_array.slice(relevant_index, full_path_array.length).join("\\")
+         FileUtils::mkdir_p(DESTINATION_FOLDER + relevant_path) unless (Dir.exists?(DESTINATION_FOLDER + relevant_path))
+
+         copy_successful = false
+         begin
+            copy_successful = true if (FileUtils.cp full_file_path, (DESTINATION_FOLDER + relevant_path), :preserve => true)
+         rescue TypeError
+            print_err "Error reading the source file. Do the source files exist in the local workspace for team?"
+         rescue
+            print_err "A problem arose when trying to copy the files"
+         end
+
+         if copy_successful.eql?(true)
+            begin
+               FileUtils.chmod("u=wrx,go=rx", "#{DESTINATION_FOLDER + relevant_path}\\#{file}") if (File.exist?("#{DESTINATION_FOLDER + relevant_path}\\#{file}")) and !(File.writable?("#{DESTINATION_FOLDER + relevant_path}\\#{file}"))
+                if (File.mtime("#{DESTINATION_FOLDER + relevant_path}\\#{file}".gsub("/", "\\")).eql?(File.mtime(full_file_path.gsub("/", "\\"))))
+                  puts "#{full_file_path} was successfully copied to #{DESTINATION_FOLDER + relevant_path}"
+               else
+                  puts "#{full_file_path} could not be copied to #{DESTINATION_FOLDER + relevant_path}!!!"
+               end
+            rescue
+               print_err "A problem arose when trying to change destination file permissions and verify the copy"
+            end
+         end
+      rescue IOError => e
+         print_err e
+      rescue
+         print_err "A problem arose when"
       end
    end
 rescue
-   print_err "A problem arose when trying to copy the files"
+   print_err "A problem arose when trying to copy the source files into the destination directory"
 ensure
    SCRIPTS_CONF_FILE.close
+   if !(bad_files_array.empty?)
+      puts "\nThe following files did not copy"
+      bad_files_array.each {|file| puts file}
+   else
+      puts "\nAll scripts were successfully copied!"
+   end
 end
