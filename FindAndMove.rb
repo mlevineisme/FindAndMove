@@ -1,5 +1,6 @@
 #-- This program takes requirements specified in the .conf file, finds the
-#   associated .rb and .xml files, and copies them to a single file location
+#   associated .rb and .xml files, and copies them to a single file
+#   location, preserving the file paths after the specified end point
 
 require 'FileUtils'
 
@@ -12,7 +13,8 @@ end
 #-- You may need to change the following variables as file extensions/locations change
 extensions_to_move = [".rb", ".xml"]
 source_folder = "c:/P4/test/pcatest/7.0/team/automation/TestScripts"
-DESTINATION_FOLDER = "C:\\TestRuns\\MovedScripts"
+DESTINATION_FOLDER = "C:\\TestRuns\\MovedScripts\\"
+LAST_PATH_SECTION_TO_REMOVE = "TestScripts"
 puts "Files matching the .conf found in #{source_folder} will be copied to #{DESTINATION_FOLDER}\n\n"
 
 #-- Open the directory configuration file
@@ -35,14 +37,18 @@ script_names.each {|line|
 
 #-- Copy the source files into the destination directory
 begin
-   FileUtils::mkdir(DESTINATION_FOLDER) unless (Dir.exists?(DESTINATION_FOLDER))
+#   FileUtils::mkdir(DESTINATION_FOLDER) unless (Dir.exists?(DESTINATION_FOLDER))
    filesEqual = []
    script_files.each do |file|
-      full_path = Dir.glob("#{source_folder}/**/#{file}").first
+      full_file_path = Dir.glob("#{source_folder}/**/#{file}").first
+      full_path_array = full_file_path.split("/").collect {|part_path| part_path unless part_path.eql?(file)}.compact
+      relevant_index = full_path_array.find_index(LAST_PATH_SECTION_TO_REMOVE)+1
+      relevant_path = full_path_array.slice(relevant_index, full_path_array.length).join("\\")
+      FileUtils::mkdir_p(DESTINATION_FOLDER + relevant_path) unless (Dir.exists?(DESTINATION_FOLDER + relevant_path))
 
       copy_successful = false
       begin
-         copy_successful = true if (FileUtils.cp full_path, DESTINATION_FOLDER, :preserve => true)
+         copy_successful = true if (FileUtils.cp full_file_path, (DESTINATION_FOLDER + relevant_path), :preserve => true)
       rescue TypeError
          print_err "Error reading the source file. Do the source files exist in the local workspace for team?"
       rescue
@@ -51,11 +57,11 @@ begin
 
       if copy_successful.eql?(true)
          begin
-            FileUtils.chmod("u=wrx,go=rx", "#{DESTINATION_FOLDER}\\#{file}") if (File.exist?("#{DESTINATION_FOLDER}\\#{file}")) and !(File.writable?("#{DESTINATION_FOLDER}\\#{file}"))
-             if (File.mtime("#{DESTINATION_FOLDER}/#{file}".gsub("/", "\\")).eql?(File.mtime(full_path.gsub("/", "\\"))))
-               puts "#{full_path} was successfully copied to #{DESTINATION_FOLDER}"
+            FileUtils.chmod("u=wrx,go=rx", "#{DESTINATION_FOLDER + relevant_path}\\#{file}") if (File.exist?("#{DESTINATION_FOLDER + relevant_path}\\#{file}")) and !(File.writable?("#{DESTINATION_FOLDER + relevant_path}\\#{file}"))
+             if (File.mtime("#{DESTINATION_FOLDER + relevant_path}\\#{file}".gsub("/", "\\")).eql?(File.mtime(full_file_path.gsub("/", "\\"))))
+               puts "#{full_file_path} was successfully copied to #{DESTINATION_FOLDER + relevant_path}"
             else
-               puts "#{full_path} could not be copied to #{DESTINATION_FOLDER}!!!"
+               puts "#{full_file_path} could not be copied to #{DESTINATION_FOLDER + relevant_path}!!!"
             end
          rescue
             print_err "A problem arose when trying to change destination file permissions and verify the copy"
