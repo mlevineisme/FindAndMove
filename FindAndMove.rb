@@ -75,7 +75,7 @@ begin
       rescue IOError => e
          print_err e
       rescue
-         print_err "A problem arose when"
+         print_err "A problem arose when trying to copy the source files into the destination directory"
       end
    end
 rescue
